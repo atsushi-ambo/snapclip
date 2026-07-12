@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Editor / local
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local runtime artifacts (never ship)
+*.log
+seen.json
+.local/
