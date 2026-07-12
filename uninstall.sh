@@ -1,25 +1,22 @@
 #!/usr/bin/env bash
-# Remove SnapClip LaunchAgent.
+# Remove SnapClip agent and app.
 set -euo pipefail
 
-LABEL="com.snapclip.agent"
+LABEL="com.snapclip.app"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
+APP_DST="$HOME/Applications/SnapClip.app"
 
-if launchctl list 2>/dev/null | grep -q "$LABEL"; then
-  launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || \
-    launchctl unload "$PLIST" 2>/dev/null || true
-fi
+for old in com.snapclip.app com.snapclip.agent com.user.screenshot-to-copy; do
+  launchctl bootout "gui/$(id -u)/$old" 2>/dev/null || true
+  rm -f "$HOME/Library/LaunchAgents/${old}.plist"
+done
+
+osascript -e 'tell application "SnapClip" to quit' 2>/dev/null || true
+pkill -x "SnapClip" 2>/dev/null || true
 pkill -f "snapclip.py" 2>/dev/null || true
+rm -rf "$APP_DST"
 rm -f "$PLIST"
 
-# Also clean legacy label if present
-LEGACY="com.user.screenshot-to-copy"
-if launchctl list 2>/dev/null | grep -q "$LEGACY"; then
-  launchctl bootout "gui/$(id -u)/$LEGACY" 2>/dev/null || true
-fi
-rm -f "$HOME/Library/LaunchAgents/${LEGACY}.plist"
-
-# Optionally restore screenshot location to Desktop
 if [[ "${RESTORE_DESKTOP:-1}" == "1" ]]; then
   defaults write com.apple.screencapture location "$HOME/Desktop"
   killall SystemUIServer 2>/dev/null || true
@@ -27,6 +24,6 @@ if [[ "${RESTORE_DESKTOP:-1}" == "1" ]]; then
 fi
 
 echo "SnapClip uninstalled."
-echo "  Logs (left in place):  ~/Library/Logs/snapclip*.log"
-echo "  State (left in place): ~/Library/Application Support/SnapClip/"
-echo "  Files (left in place): ~/Screenshots/"
+echo "  History left at: ~/Library/Application Support/SnapClip/"
+echo "  Screenshots left at: ~/Screenshots/"
+echo "  To wipe history: rm -rf ~/Library/Application\\ Support/SnapClip"
