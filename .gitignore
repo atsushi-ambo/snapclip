@@ -4,20 +4,24 @@
 .LSOverride
 ._*
 
-# Python
+# Build
+dist/
+*.o
+.derived/
+
+# Python (legacy)
 __pycache__/
 *.py[cod]
-*.egg-info/
 .venv/
 venv/
 
-# Editor / local
+# Editor
 .idea/
 .vscode/
 *.swp
 *~
 
-# Local runtime artifacts (never ship)
+# Local runtime
 *.log
 seen.json
 .local/

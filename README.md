@@ -1,14 +1,20 @@
 # SnapClip
 
-**SnapClip** automatically copies every new macOS screenshot to the clipboard so you can paste with **Cmd+V** — no manual copy step.
+**Clipy-style clipboard history for macOS** — plus automatic screenshot capture.
 
-| Shortcut | Result |
-|----------|--------|
-| **Cmd+Shift+4** | Region → file saved + **clipboard** |
-| **Cmd+Shift+3** | Full screen → file saved + **clipboard** |
-| **Cmd+Shift+4**, then **Space** | Window → file saved + **clipboard** |
+Keep the last **30** clips (text + images), pick one from a list, and paste it.  
+Built as a native menu-bar app (Swift). No network, no accounts, no telemetry.
 
-macOS-only. Uses system `python3` + `osascript`. No Homebrew dependencies, no network access, no accounts.
+## Features
+
+| Feature | How |
+|--------|-----|
+| Clipboard history | Last **30** items (configurable) |
+| Text + images | Including screenshots |
+| Picker | **⌘⇧V** or click the menu-bar icon |
+| Paste | Select an item → restores clipboard + sends paste |
+| Screenshots | **⌘⇧4** / **⌘⇧3** auto-saved into history and clipboard |
+| Clear | Menu → Clear History |
 
 ## Install
 
@@ -18,71 +24,77 @@ cd snapclip
 ./install.sh
 ```
 
-This will:
+Requires Xcode Command Line Tools (`swiftc`). Install builds `SnapClip.app` into `~/Applications` and starts it at login.
 
-1. Create `~/Screenshots`
-2. Point macOS screenshots there (so the background agent can read them)
-3. Install a LaunchAgent that starts at login
+### One-time permission
+
+**System Settings → Privacy & Security → Accessibility → enable SnapClip**
+
+Needed so choosing a history item can type **⌘V** into the frontmost app.  
+Without it, items still go to the clipboard — you paste manually.
 
 ## Use
 
-1. `Cmd+Shift+4` (or `Cmd+Shift+3`)
-2. `Cmd+V` to paste
+1. Copy anything as usual (**⌘C**) — SnapClip remembers it  
+2. Or take a screenshot (**⌘⇧4**) — also remembered  
+3. Press **⌘⇧V** (or click the menu-bar icon)  
+4. Pick an item (keys **1–9** work while the menu is open)  
+5. It pastes into the current app  
 
-Files are saved under **`~/Screenshots`**.
+Normal **⌘V** still pastes only the *latest* clipboard (macOS default).
 
-## Uninstall
+## Uninstall Clipy
+
+SnapClip is meant to replace Clipy for day-to-day history:
+
+1. Quit Clipy  
+2. Remove Clipy from Login Items if needed  
+3. Keep using **⌘⇧V** in SnapClip  
+
+## Uninstall SnapClip
 
 ```bash
 ./uninstall.sh
 ```
 
-Stops the agent and restores screenshot saves to the Desktop.
+## Config
+
+| Env / install var | Default | Meaning |
+|-------------------|---------|---------|
+| `SNAPCLIP_MAX_ITEMS` | `30` | History length (1–100) |
+| `SNAPCLIP_DIR` | `~/Screenshots` | Screenshot watch folder |
+
+Example:
+
+```bash
+SNAPCLIP_MAX_ITEMS=50 ./install.sh
+```
 
 ## Logs
 
 ```bash
-tail -f ~/Library/Logs/snapclip.log
+tail -f ~/Library/Logs/snapclip.stderr.log
 ```
 
-## Optional notification
+History files (mode `600`):
 
-Edit `~/Library/LaunchAgents/com.snapclip.agent.plist` and set:
-
-```xml
-<key>SNAPCLIP_NOTIFY</key>
-<string>1</string>
-```
-
-Then reinstall:
-
-```bash
-./uninstall.sh && ./install.sh
+```text
+~/Library/Application Support/SnapClip/history.json
+~/Library/Application Support/SnapClip/items/
 ```
 
 ## Privacy & security
 
-- **Local only** — no telemetry, no uploads, no network calls.
-- **No secrets** — the agent only reads new image files in the screenshot folder and writes them to the pasteboard.
-- **No Desktop access required** — default watch folder is `~/Screenshots` (Desktop is TCC-protected for background agents).
-- **Symlinks ignored** — only regular image files directly in the watch folder are copied.
-- **Size limit** — files larger than 50 MB are skipped.
-- **State file** — `~/Library/Application Support/SnapClip/seen.json` is created with mode `600`.
+- **Local only** — no network calls  
+- History can include secrets if you copy them (passwords, tokens). Clear history when needed.  
+- Item files and index use permissions `600`  
+- Symlinks in the screenshot folder are ignored; images over 50 MB are skipped  
 
-See [SECURITY.md](SECURITY.md) for reporting issues.
+See [SECURITY.md](SECURITY.md).
 
-## Why not Desktop?
+## Why not Desktop for screenshots?
 
-Background agents cannot list `~/Desktop` without Full Disk Access. Install uses `~/Screenshots` so it works out of the box.
-
-## Native macOS alternative
-
-Clipboard only (**no file saved**):
-
-- **Cmd+Control+Shift+4** — region  
-- **Cmd+Control+Shift+3** — full screen  
-
-SnapClip is for **save file + auto-copy**.
+Background apps cannot always read `~/Desktop` without Full Disk Access. Install points screenshots at `~/Screenshots`.
 
 ## License
 
