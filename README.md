@@ -13,7 +13,7 @@ macOS-only. Uses system `python3` + `osascript`. No Homebrew dependencies, no ne
 ## Install
 
 ```bash
-git clone https://github.com/<you>/snapclip.git
+git clone https://github.com/atsushi-ambo/snapclip.git
 cd snapclip
 ./install.sh
 ```
