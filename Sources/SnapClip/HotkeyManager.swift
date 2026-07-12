@@ -59,7 +59,7 @@ final class HotkeyManager {
             &hotKeyRef
         )
         if status != noErr {
-            NSLog("SnapClip: hotkey register failed (\(status)). ⌘⇧V may be taken (e.g. by Clipy).")
+            NSLog("SnapClip: hotkey register failed (\(status)). ⌘⇧V may be taken by another app.")
         } else {
             NSLog("SnapClip: hotkey registered — ⌘⇧V")
         }

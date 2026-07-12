@@ -92,7 +92,7 @@ final class StatusBarController: NSObject {
         statusItem.menu = menu
     }
 
-    /// Open history menu (Clipy-style picker via ⌘⇧V).
+    /// Open history menu (picker via ⌘⇧V).
     func showHistoryMenuAtMouse() {
         rebuildMenu()
         // Open the status-item menu — reliable without an extra panel window.
