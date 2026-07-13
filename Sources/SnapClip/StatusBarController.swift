@@ -5,13 +5,17 @@ final class StatusBarController: NSObject {
     private let statusItem: NSStatusItem
     private let hotkey = HotkeyManager()
 
+    /// Latest N items shown at the top of the menu (not folded).
+    private let topVisibleCount = 5
+    /// Older items grouped into submenus of this size (6–10, 11–15, …).
+    private let foldGroupSize = 5
+
     init(store: HistoryStore) {
         self.store = store
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
         if let button = statusItem.button {
-            // SF Symbol if available, else text
             if let image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "SnapClip") {
                 image.isTemplate = true
                 button.image = image
@@ -47,25 +51,34 @@ final class StatusBarController: NSObject {
             empty.isEnabled = false
             menu.addItem(empty)
         } else {
-            for (index, item) in items.enumerated() {
-                let prefix: String
-                switch item.kind {
-                case .text: prefix = "Aa"
-                case .image: prefix = "🖼"
+            // Latest 5 always visible
+            let topEnd = min(topVisibleCount, items.count)
+            for index in 0..<topEnd {
+                menu.addItem(makeClipMenuItem(item: items[index], index: index, assignHotkey: true))
+            }
+
+            // Fold remaining into submenus: 6–10, 11–15, …
+            if items.count > topVisibleCount {
+                menu.addItem(.separator())
+                var start = topVisibleCount
+                while start < items.count {
+                    let end = min(start + foldGroupSize, items.count) // exclusive index
+                    let labelStart = start + 1
+                    let labelEnd = end
+                    let submenuRoot = NSMenuItem(
+                        title: "Older \(labelStart)–\(labelEnd)…",
+                        action: nil,
+                        keyEquivalent: ""
+                    )
+                    let submenu = NSMenu()
+                    submenu.autoenablesItems = false
+                    for index in start..<end {
+                        submenu.addItem(makeClipMenuItem(item: items[index], index: index, assignHotkey: false))
+                    }
+                    menu.setSubmenu(submenu, for: submenuRoot)
+                    menu.addItem(submenuRoot)
+                    start = end
                 }
-                let title = "\(index + 1). [\(prefix)] \(item.preview)"
-                let mi = NSMenuItem(
-                    title: title,
-                    action: #selector(pasteItem(_:)),
-                    keyEquivalent: index < 9 ? "\(index + 1)" : ""
-                )
-                mi.target = self
-                mi.representedObject = item.id
-                // Number keys without modifiers when menu is open
-                if index < 9 {
-                    mi.keyEquivalentModifierMask = []
-                }
-                menu.addItem(mi)
             }
         }
 
@@ -92,10 +105,30 @@ final class StatusBarController: NSObject {
         statusItem.menu = menu
     }
 
+    private func makeClipMenuItem(item: ClipItem, index: Int, assignHotkey: Bool) -> NSMenuItem {
+        let prefix: String
+        switch item.kind {
+        case .text: prefix = "Aa"
+        case .image: prefix = "🖼"
+        }
+        let title = "\(index + 1). [\(prefix)] \(item.preview)"
+        let useHotkey = assignHotkey && index < 5
+        let mi = NSMenuItem(
+            title: title,
+            action: #selector(pasteItem(_:)),
+            keyEquivalent: useHotkey ? "\(index + 1)" : ""
+        )
+        mi.target = self
+        mi.representedObject = item.id
+        if useHotkey {
+            mi.keyEquivalentModifierMask = []
+        }
+        return mi
+    }
+
     /// Open history menu (picker via ⌘⇧V).
     func showHistoryMenuAtMouse() {
         rebuildMenu()
-        // Open the status-item menu — reliable without an extra panel window.
         statusItem.button?.performClick(nil)
     }
 
@@ -116,7 +149,7 @@ final class StatusBarController: NSObject {
         alert.informativeText = """
         To paste into other apps after you pick a history item, macOS needs Accessibility permission for SnapClip.
 
-        System Settings → Privacy & Security → Accessibility → enable SnapClip.
+        System Settings → Privacy & Security → Accessibility → click +, choose ~/Applications/SnapClip.app, turn it on.
 
         You can still copy items to the clipboard from the menu without this; only automatic Cmd+V needs it.
         """
