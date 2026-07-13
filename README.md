@@ -12,6 +12,7 @@ Built as a native menu-bar app (Swift). No network, no accounts, no telemetry.
 | Clipboard history | Last **30** items (configurable) |
 | Text + images | Including screenshots |
 | Picker | **⌘⇧V** or click the menu-bar icon |
+| Menu layout | Latest **5** items open; older ones in folders **6–10**, **11–15**, … |
 | Paste | Select an item → restores clipboard + sends paste |
 | Screenshots | **⌘⇧4** / **⌘⇧3** auto-saved into history and clipboard |
 | Clear | Menu → Clear History |
