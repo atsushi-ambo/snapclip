@@ -25,3 +25,8 @@ venv/
 *.log
 seen.json
 .local/
+
+# Editor / agent local state
+.claude/
+.cursor/
+.codex/

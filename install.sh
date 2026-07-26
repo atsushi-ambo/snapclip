@@ -7,9 +7,54 @@ LABEL="com.snapclip.app"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 APP_SRC="$ROOT/dist/SnapClip.app"
 APP_DST="$HOME/Applications/SnapClip.app"
-SHOT_DIR="${SNAPCLIP_DIR:-$HOME/Screenshots}"
 LOG_DIR="$HOME/Library/Logs"
+
+# --- Validate config (prevents plist XML injection / broken paths) ---
+xml_escape() {
+  # Escape for XML text nodes
+  local s=$1
+  s=${s//&/&amp;}
+  s=${s//</&lt;}
+  s=${s//>/&gt;}
+  s=${s//\"/&quot;}
+  s=${s//\'/&apos;}
+  printf '%s' "$s"
+}
+
+# Expand and normalize screenshot dir
+SHOT_DIR="${SNAPCLIP_DIR:-$HOME/Screenshots}"
+SHOT_DIR="${SHOT_DIR/#\~/$HOME}"
+# Must be absolute
+if [[ "$SHOT_DIR" != /* ]]; then
+  echo "error: SNAPCLIP_DIR must be an absolute path (got: $SHOT_DIR)" >&2
+  exit 1
+fi
+# Reject characters that would break or inject into the LaunchAgent plist.
+# (Do not use $'\0' in bash [[ ]] patterns — it matches incorrectly.)
+if [[ "$SHOT_DIR" == *$'\n'* || "$SHOT_DIR" == *$'\r'* || "$SHOT_DIR" == *$'\t'* ]]; then
+  echo "error: SNAPCLIP_DIR contains invalid control characters" >&2
+  exit 1
+fi
+if [[ "$SHOT_DIR" == *'<'* || "$SHOT_DIR" == *'>'* || "$SHOT_DIR" == *'&'* || "$SHOT_DIR" == *'"'* ]]; then
+  echo "error: SNAPCLIP_DIR must not contain < > & \"" >&2
+  exit 1
+fi
+
 MAX_ITEMS="${SNAPCLIP_MAX_ITEMS:-30}"
+if ! [[ "$MAX_ITEMS" =~ ^[0-9]+$ ]]; then
+  echo "error: SNAPCLIP_MAX_ITEMS must be an integer (got: $MAX_ITEMS)" >&2
+  exit 1
+fi
+if (( MAX_ITEMS < 1 || MAX_ITEMS > 100 )); then
+  echo "error: SNAPCLIP_MAX_ITEMS must be between 1 and 100 (got: $MAX_ITEMS)" >&2
+  exit 1
+fi
+
+# APP_DST is fixed under $HOME — still escape for the plist
+if [[ "$APP_DST" == *'<'* || "$APP_DST" == *'>'* || "$APP_DST" == *'&'* ]]; then
+  echo "error: install path contains invalid characters" >&2
+  exit 1
+fi
 
 chmod +x "$ROOT/scripts/build.sh" "$ROOT/install.sh" "$ROOT/uninstall.sh" 2>/dev/null || true
 
@@ -20,11 +65,18 @@ echo "==> Installing app to $APP_DST"
 mkdir -p "$HOME/Applications"
 rm -rf "$APP_DST"
 cp -R "$APP_SRC" "$APP_DST"
-# Re-sign after copy
+# Re-sign after copy (ad-hoc; build from this source tree only)
 codesign --force --deep --sign - "$APP_DST" 2>/dev/null || true
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR" "$SHOT_DIR"
-mkdir -p "$HOME/Library/Application Support/SnapClip"
+mkdir -p "$HOME/Library/Application Support/SnapClip/items"
+chmod 700 "$HOME/Library/Application Support/SnapClip" \
+          "$HOME/Library/Application Support/SnapClip/items" 2>/dev/null || true
+
+# Owner-only log files (create empty if missing, then tighten mode)
+: >>"$LOG_DIR/snapclip.stdout.log"
+: >>"$LOG_DIR/snapclip.stderr.log"
+chmod 600 "$LOG_DIR/snapclip.stdout.log" "$LOG_DIR/snapclip.stderr.log" 2>/dev/null || true
 
 # Point macOS screenshots to a folder the agent can read
 defaults write com.apple.screencapture location "$SHOT_DIR"
@@ -35,11 +87,19 @@ for old in com.snapclip.app com.snapclip.agent com.user.screenshot-to-copy; do
   launchctl bootout "gui/$(id -u)/$old" 2>/dev/null || true
   rm -f "$HOME/Library/LaunchAgents/${old}.plist"
 done
-pkill -f "snapclip.py" 2>/dev/null || true
+# Prefer exact process name; keep a narrow legacy pattern for the old agent only
 pkill -x "SnapClip" 2>/dev/null || true
+pkill -x "snapclip.py" 2>/dev/null || true
 # Also quit if already running from Applications
 osascript -e 'tell application "SnapClip" to quit' 2>/dev/null || true
 sleep 0.3
+
+APP_BIN_XML="$(xml_escape "${APP_DST}/Contents/MacOS/SnapClip")"
+SHOT_DIR_XML="$(xml_escape "$SHOT_DIR")"
+LOG_OUT_XML="$(xml_escape "${LOG_DIR}/snapclip.stdout.log")"
+LOG_ERR_XML="$(xml_escape "${LOG_DIR}/snapclip.stderr.log")"
+MAX_ITEMS_XML="$(xml_escape "$MAX_ITEMS")"
+LABEL_XML="$(xml_escape "$LABEL")"
 
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -47,10 +107,10 @@ cat > "$PLIST" <<EOF
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>${LABEL}</string>
+  <string>${LABEL_XML}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${APP_DST}/Contents/MacOS/SnapClip</string>
+    <string>${APP_BIN_XML}</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -61,15 +121,15 @@ cat > "$PLIST" <<EOF
   <key>LimitLoadToSessionType</key>
   <string>Aqua</string>
   <key>StandardOutPath</key>
-  <string>${LOG_DIR}/snapclip.stdout.log</string>
+  <string>${LOG_OUT_XML}</string>
   <key>StandardErrorPath</key>
-  <string>${LOG_DIR}/snapclip.stderr.log</string>
+  <string>${LOG_ERR_XML}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>SNAPCLIP_DIR</key>
-    <string>${SHOT_DIR}</string>
+    <string>${SHOT_DIR_XML}</string>
     <key>SNAPCLIP_MAX_ITEMS</key>
-    <string>${MAX_ITEMS}</string>
+    <string>${MAX_ITEMS_XML}</string>
   </dict>
 </dict>
 </plist>
@@ -88,9 +148,17 @@ echo "  Menu bar:          clipboard icon (doc.on.clipboard)"
 echo "  History picker:    ⌘⇧V  (or click the menu bar icon)"
 echo "  Logs:              $LOG_DIR/snapclip.stderr.log"
 echo ""
+echo "NOTE: macOS screenshot save location is now: $SHOT_DIR"
+echo "      (uninstall restores Desktop unless RESTORE_DESKTOP=0)"
+echo ""
+echo "PRIVACY: Clipboard history can store passwords/tokens you copy."
+echo "  Clear via menu, or: rm -rf ~/Library/Application\\ Support/SnapClip"
+echo "  Build only from this source tree; the app is ad-hoc signed."
+echo ""
 echo "IMPORTANT — one-time permission:"
 echo "  System Settings → Privacy & Security → Accessibility"
 echo "  → click +, open ~/Applications/SnapClip.app, turn it on"
 echo "  (needed so picking a history item can paste)."
 echo ""
 echo "Uninstall: $ROOT/uninstall.sh"
+echo "  Wipe history too: SNAPCLIP_PURGE=1 $ROOT/uninstall.sh"
