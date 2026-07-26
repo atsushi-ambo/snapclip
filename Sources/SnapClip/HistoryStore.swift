@@ -11,7 +11,7 @@ struct ClipItem: Codable, Identifiable, Equatable {
     let kind: ClipKind
     let preview: String
     let created: TimeInterval
-    /// Relative path under Application Support/SnapClip/
+    /// Relative path under Application Support/SnapClip/ (must stay under that root).
     let relativePath: String
 
     var absolutePath: URL {
@@ -21,14 +21,20 @@ struct ClipItem: Codable, Identifiable, Equatable {
 
 /// Persists the last N clipboard items (text + images) on disk.
 final class HistoryStore {
+    /// Max UTF-8 bytes accepted for a single text clip (images use a separate 50 MB cap).
+    static let maxTextBytes = 2 * 1024 * 1024
+    /// Max bytes for a single image clip.
+    static let maxImageBytes = 50 * 1024 * 1024
+
     static let supportDir: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = base.appendingPathComponent("SnapClip", isDirectory: true)
+        let items = dir.appendingPathComponent("items", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try? FileManager.default.createDirectory(
-            at: dir.appendingPathComponent("items", isDirectory: true),
-            withIntermediateDirectories: true
-        )
+        try? FileManager.default.createDirectory(at: items, withIntermediateDirectories: true)
+        // Owner-only dirs so other local accounts cannot list UUID filenames.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: items.path)
         return dir
     }()
 
@@ -67,6 +73,11 @@ final class HistoryStore {
             trimmed = String(trimmed.dropLast())
         }
         guard !trimmed.isEmpty else { return nil }
+        // Bound disk use / accidental giant pastes
+        guard trimmed.utf8.count <= Self.maxTextBytes else {
+            NSLog("SnapClip: skipped text clip over \(Self.maxTextBytes) bytes")
+            return nil
+        }
         // Dedupe consecutive identical text
         if let first = items.first, first.kind == .text, first.preview == preview(for: trimmed) {
             // Still check full content
@@ -76,6 +87,7 @@ final class HistoryStore {
         }
         let id = UUID().uuidString
         let rel = "items/\(id).txt"
+        guard Self.isSafeRelativePath(rel) else { return nil }
         let url = HistoryStore.supportDir.appendingPathComponent(rel)
         do {
             try trimmed.write(to: url, atomically: true, encoding: .utf8)
@@ -97,7 +109,7 @@ final class HistoryStore {
 
     @discardableResult
     func addImage(from data: Data, preferredExt: String = "png") -> ClipItem? {
-        guard !data.isEmpty, data.count <= 50 * 1024 * 1024 else { return nil }
+        guard !data.isEmpty, data.count <= Self.maxImageBytes else { return nil }
         // Dedupe consecutive identical images by size + prefix hash
         if let first = items.first, first.kind == .image,
            let existing = try? Data(contentsOf: first.absolutePath),
@@ -105,8 +117,9 @@ final class HistoryStore {
             return nil
         }
         let id = UUID().uuidString
-        let ext = preferredExt.lowercased()
+        let ext = Self.sanitizedImageExtension(preferredExt)
         let rel = "items/\(id).\(ext)"
+        guard Self.isSafeRelativePath(rel) else { return nil }
         let url = HistoryStore.supportDir.appendingPathComponent(rel)
         do {
             try data.write(to: url, options: .atomic)
@@ -144,7 +157,10 @@ final class HistoryStore {
         lock.lock()
         defer { lock.unlock() }
         for item in items {
-            try? FileManager.default.removeItem(at: item.absolutePath)
+            let url = item.absolutePath
+            if Self.isPathInsideSupportDir(url) {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
         items = []
         saveUnlocked()
@@ -155,13 +171,20 @@ final class HistoryStore {
         defer { lock.unlock() }
         if let idx = items.firstIndex(where: { $0.id == id }) {
             let item = items.remove(at: idx)
-            try? FileManager.default.removeItem(at: item.absolutePath)
+            let url = item.absolutePath
+            if Self.isPathInsideSupportDir(url) {
+                try? FileManager.default.removeItem(at: url)
+            }
             saveUnlocked()
         }
     }
 
     /// Put item on the pasteboard (does not trigger re-history if markIgnoreNextChange was set).
     func restoreToPasteboard(_ item: ClipItem) -> Bool {
+        guard Self.isPathInsideSupportDir(item.absolutePath) else {
+            NSLog("SnapClip: refused to restore item outside support dir")
+            return false
+        }
         let pb = NSPasteboard.general
         pb.clearContents()
         switch item.kind {
@@ -196,6 +219,44 @@ final class HistoryStore {
         }
     }
 
+    // MARK: - Path safety
+
+    /// Only allow relative paths like `items/<uuid>.<ext>` with no traversal.
+    static func isSafeRelativePath(_ relativePath: String) -> Bool {
+        let path = relativePath
+        guard !path.isEmpty else { return false }
+        guard !path.hasPrefix("/") else { return false }
+        guard !path.contains("\0") else { return false }
+        // Reject traversal and backslashes
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard !parts.isEmpty, !parts.contains(".."), !parts.contains(".") else { return false }
+        guard parts.allSatisfy({ !$0.contains("\\") && !$0.isEmpty }) else { return false }
+        // Must live under items/
+        guard parts.count == 2, parts[0] == "items" else { return false }
+        let file = parts[1]
+        // UUID-ish name + simple extension (letters only)
+        guard let dot = file.lastIndex(of: ".") else { return false }
+        let name = String(file[..<dot])
+        let ext = String(file[file.index(after: dot)...]).lowercased()
+        guard !name.isEmpty, name.allSatisfy({ $0.isHexDigit || $0 == "-" }) else { return false }
+        guard ext.range(of: "^[a-z0-9]{1,8}$", options: .regularExpression) != nil else { return false }
+        return isPathInsideSupportDir(supportDir.appendingPathComponent(path))
+    }
+
+    static func isPathInsideSupportDir(_ url: URL) -> Bool {
+        let root = supportDir.resolvingSymlinksInPath().standardizedFileURL.path
+        let candidate = url.resolvingSymlinksInPath().standardizedFileURL.path
+        if candidate == root { return false } // must be a file under root, not the dir itself
+        let prefix = root.hasSuffix("/") ? root : root + "/"
+        return candidate.hasPrefix(prefix)
+    }
+
+    private static func sanitizedImageExtension(_ preferred: String) -> String {
+        let ext = preferred.lowercased()
+        let allowed: Set<String> = ["png", "jpg", "jpeg", "tiff", "tif", "gif", "heic", "bmp"]
+        return allowed.contains(ext) ? ext : "png"
+    }
+
     // MARK: - Private
 
     private func insert(_ item: ClipItem) {
@@ -204,7 +265,9 @@ final class HistoryStore {
         items.insert(item, at: 0)
         while items.count > maxItems {
             let dropped = items.removeLast()
-            try? FileManager.default.removeItem(at: dropped.absolutePath)
+            if Self.isPathInsideSupportDir(dropped.absolutePath) {
+                try? FileManager.default.removeItem(at: dropped.absolutePath)
+            }
         }
         saveUnlocked()
     }
@@ -227,8 +290,15 @@ final class HistoryStore {
             items = []
             return
         }
-        // Drop missing files
-        items = decoded.filter { FileManager.default.fileExists(atPath: $0.absolutePath.path) }
+        // Drop missing files and anything that escapes the support directory
+        let filtered = decoded.filter { item in
+            guard Self.isSafeRelativePath(item.relativePath) else {
+                NSLog("SnapClip: dropped history entry with unsafe path")
+                return false
+            }
+            return FileManager.default.fileExists(atPath: item.absolutePath.path)
+        }
+        items = filtered
         if items.count != decoded.count {
             saveUnlocked()
         }

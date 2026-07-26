@@ -5,6 +5,8 @@ Clipboard history for macOS — plus automatic screenshot capture.
 Keep the last **30** clips (text + images), pick one from a list, and paste it.  
 Built as a native menu-bar app (Swift). No network, no accounts, no telemetry.
 
+> **Privacy:** History is stored **unencrypted** on disk and may include passwords or tokens you copy. Clear it when needed. Menu previews show the first ~60 characters of text. Build only from this source; the app is ad-hoc signed. See [SECURITY.md](SECURITY.md).
+
 ## Features
 
 | Feature | How |
@@ -25,7 +27,7 @@ cd snapclip
 ./install.sh
 ```
 
-Requires Xcode Command Line Tools (`swiftc`). Install builds `SnapClip.app` into `~/Applications` and starts it at login.
+Requires Xcode Command Line Tools (`swiftc`). Install builds `SnapClip.app` into `~/Applications`, registers a login LaunchAgent, and points macOS screenshots at `~/Screenshots` (configurable).
 
 ### One-time permission
 
@@ -57,12 +59,20 @@ Normal **⌘V** still pastes only the *latest* clipboard (macOS default).
 ./uninstall.sh
 ```
 
+Wipe history as well:
+
+```bash
+SNAPCLIP_PURGE=1 ./uninstall.sh
+```
+
 ## Config
 
 | Env / install var | Default | Meaning |
 |-------------------|---------|---------|
 | `SNAPCLIP_MAX_ITEMS` | `30` | History length (1–100) |
-| `SNAPCLIP_DIR` | `~/Screenshots` | Screenshot watch folder |
+| `SNAPCLIP_DIR` | `~/Screenshots` | Screenshot watch folder (absolute path) |
+| `SNAPCLIP_PURGE` | `0` | On uninstall, delete history if `1` |
+| `RESTORE_DESKTOP` | `1` | On uninstall, restore screenshot location to Desktop |
 
 Example:
 
@@ -76,7 +86,7 @@ SNAPCLIP_MAX_ITEMS=50 ./install.sh
 tail -f ~/Library/Logs/snapclip.stderr.log
 ```
 
-History files (mode `600`):
+History (dirs `700`, files `600`):
 
 ```text
 ~/Library/Application Support/SnapClip/history.json
@@ -87,8 +97,11 @@ History files (mode `600`):
 
 - **Local only** — no network calls  
 - History can include secrets if you copy them (passwords, tokens). Clear history when needed.  
-- Item files and index use permissions `600`  
-- Symlinks in the screenshot folder are ignored; images over 50 MB are skipped  
+- Support directory `700`; item files and index `600`  
+- Text &gt; **2 MB** and images &gt; **50 MB** are skipped  
+- Symlinks and non-direct children in the screenshot folder are ignored  
+- History paths are validated so entries cannot escape the support directory  
+- Ad-hoc code signing for local use only — prefer building from this repo  
 
 See [SECURITY.md](SECURITY.md).
 
