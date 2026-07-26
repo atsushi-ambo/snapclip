@@ -170,12 +170,29 @@ final class HistoryStore {
             return pb.setString(text, forType: .string)
         case .image:
             guard let data = try? Data(contentsOf: item.absolutePath) else { return false }
-            if let img = NSImage(data: data) {
-                return pb.writeObjects([img])
+            guard let img = NSImage(data: data) else {
+                pb.declareTypes([.png], owner: nil)
+                return pb.setData(data, forType: .png)
             }
-            // Fallback: raw PNG
-            pb.setData(data, forType: .png)
-            return true
+            // Offer both public.png and public.tiff. Writing the NSImage alone yields
+            // TIFF only, which some readers (terminal TUIs looking for public.png)
+            // never pick up.
+            let isPNG = item.absolutePath.pathExtension.lowercased() == "png"
+            let tiff = img.tiffRepresentation
+            let png: Data? = isPNG ? data : tiff
+                .flatMap { NSBitmapImageRep(data: $0) }
+                .flatMap { $0.representation(using: .png, properties: [:]) }
+
+            var types: [NSPasteboard.PasteboardType] = []
+            if png != nil { types.append(.png) }
+            if tiff != nil { types.append(.tiff) }
+            guard !types.isEmpty else { return false }
+            pb.declareTypes(types, owner: nil)
+
+            var ok = false
+            if let png { ok = pb.setData(png, forType: .png) || ok }
+            if let tiff { ok = pb.setData(tiff, forType: .tiff) || ok }
+            return ok
         }
     }
 
