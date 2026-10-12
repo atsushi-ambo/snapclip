@@ -5,13 +5,14 @@ import AppKit
 final class ScreenshotWatcher {
     private let store: HistoryStore
     private let directory: URL
+    private let pasteboard: NSPasteboard
     private var known = Set<String>()
     private var timer: Timer?
-    private let maxAgeOnDiscover: TimeInterval = 8
 
     var onNewScreenshot: (() -> Void)?
 
-    init(store: HistoryStore, directory: URL? = nil) {
+    init(store: HistoryStore, directory: URL? = nil, pasteboard: NSPasteboard = .general) {
+        self.pasteboard = pasteboard
         self.store = store
         if let directory {
             self.directory = directory.resolvingSymlinksInPath().standardizedFileURL
@@ -76,7 +77,15 @@ final class ScreenshotWatcher {
         }
     }
 
-    private func scan() {
+    func discardPendingScreenshots() {
+        seedKnown()
+    }
+
+    func scan() {
+        guard !store.isRecordingPaused else {
+            seedKnown()
+            return
+        }
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(
             at: directory,
@@ -90,7 +99,15 @@ final class ScreenshotWatcher {
         ) else { return }
 
         let now = Date()
-        for url in files where isSafeImageFile(url) {
+        // Folder enumeration has no chronological guarantee; the newest capture
+        // must be the last image copied when several arrive together.
+        let images = files.filter { isSafeImageFile($0) }.sorted {
+            let left = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let right = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return left == right ? $0.lastPathComponent < $1.lastPathComponent : left < right
+        }
+        known.formIntersection(Set(images.map(fileKey)))
+        for url in images {
             let key = fileKey(url)
             if known.contains(key) { continue }
 
@@ -105,21 +122,22 @@ final class ScreenshotWatcher {
                 continue
             }
 
-            if now.timeIntervalSince(mdate) > maxAgeOnDiscover {
-                known.insert(key)
-                continue
-            }
             // Brief settle
             if now.timeIntervalSince(mdate) < 0.35 { continue }
 
-            known.insert(key)
-            if let item = store.addImage(fromFile: url) {
-                // Also put on pasteboard for immediate Cmd+V
-                store.markIgnoreNextChange()
-                _ = store.restoreToPasteboard(item)
-                NSLog("SnapClip: screenshot captured → \(url.lastPathComponent)")
-                onNewScreenshot?()
+            // Retry incomplete files instead of marking them as captured forever.
+            guard let data = try? Data(contentsOf: url), NSImage(data: data) != nil else { continue }
+            let existing = store.items.first.flatMap { item -> ClipItem? in
+                guard item.kind == .image,
+                      (try? Data(contentsOf: item.absolutePath)) == data else { return nil }
+                return item
             }
+            guard let item = existing ?? store.addImage(from: data, preferredExt: url.pathExtension),
+                  store.restoreToPasteboard(item, pasteboard: pasteboard) else { continue }
+            store.markIgnoreNextChange(pasteboard: pasteboard)
+            known.insert(key)
+            NSLog("SnapClip: screenshot copied to clipboard")
+            onNewScreenshot?()
         }
     }
 
@@ -171,7 +189,7 @@ final class ScreenshotWatcher {
         if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
            let size = attrs[.size] as? NSNumber,
            let mdate = attrs[.modificationDate] as? Date {
-            return "\(path)::\(size)::\(Int(mdate.timeIntervalSince1970))"
+            return "\(path)::\(size)::\(mdate.timeIntervalSince1970)"
         }
         return path
     }

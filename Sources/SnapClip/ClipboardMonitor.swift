@@ -27,13 +27,18 @@ final class ClipboardMonitor {
         timer = nil
     }
 
+    /// Pausing/resuming must not save whatever was copied during the pause.
+    func discardCurrentClipboard() {
+        lastChangeCount = NSPasteboard.general.changeCount
+    }
+
     private func tick() {
         let pb = NSPasteboard.general
         let count = pb.changeCount
         guard count != lastChangeCount else { return }
         lastChangeCount = count
 
-        if store.shouldIgnoreChange() {
+        if store.shouldIgnoreChange(changeCount: count) {
             return
         }
         captureCurrent(force: false)

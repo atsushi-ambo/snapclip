@@ -78,8 +78,9 @@ chmod 700 "$HOME/Library/Application Support/SnapClip" \
 : >>"$LOG_DIR/snapclip.stderr.log"
 chmod 600 "$LOG_DIR/snapclip.stdout.log" "$LOG_DIR/snapclip.stderr.log" 2>/dev/null || true
 
-# Point macOS screenshots to a folder the agent can read
+# Save an original screenshot file; ScreenshotWatcher also copies it to the clipboard.
 defaults write com.apple.screencapture location "$SHOT_DIR"
+defaults delete com.apple.screencapture target 2>/dev/null || true
 killall SystemUIServer 2>/dev/null || true
 
 # Stop legacy Python agent + previous app agent
@@ -148,7 +149,8 @@ echo "  Menu bar:          clipboard icon (doc.on.clipboard)"
 echo "  History picker:    ⌘⇧V  (or click the menu bar icon)"
 echo "  Logs:              $LOG_DIR/snapclip.stderr.log"
 echo ""
-echo "NOTE: macOS screenshot save location is now: $SHOT_DIR"
+echo "NOTE: macOS screenshots are saved in: $SHOT_DIR"
+echo "      SnapClip also copies each saved screenshot to the clipboard and history."
 echo "      (uninstall restores Desktop unless RESTORE_DESKTOP=0)"
 echo ""
 echo "PRIVACY: Clipboard history can store passwords/tokens you copy."

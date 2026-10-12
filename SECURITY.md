@@ -13,7 +13,7 @@ It does **not** open network connections, upload data, or call remote APIs.
 
 ## Sensitive data warning
 
-**Clipboard history is a plaintext secrets store.** If you copy passwords, API tokens, private keys, or 2FA codes, they are written to disk. Menu previews also show the first ~60 characters of text.
+**Clipboard history is a plaintext secrets store.** If you copy passwords, API tokens, private keys, or 2FA codes, they are written to disk. Menu previews also show a short excerpt of that text.
 
 Treat the history folder like a secrets store:
 

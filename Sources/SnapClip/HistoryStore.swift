@@ -27,8 +27,12 @@ final class HistoryStore {
     static let maxImageBytes = 50 * 1024 * 1024
 
     static let supportDir: URL = {
+        #if SNAPCLIP_TESTING
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapClipTests-\(UUID().uuidString)", isDirectory: true)
+        #else
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = base.appendingPathComponent("SnapClip", isDirectory: true)
+        #endif
         let items = dir.appendingPathComponent("items", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: items, withIntermediateDirectories: true)
@@ -40,44 +44,44 @@ final class HistoryStore {
 
     private let indexURL = HistoryStore.supportDir.appendingPathComponent("history.json")
     private let maxItems: Int
+    private let preferences: UserDefaults
+    private(set) var isRecordingPaused: Bool
+    var onRecordingStateChange: (() -> Void)?
     private let lock = NSLock()
     private(set) var items: [ClipItem] = []
 
     /// When we paste from history we set the pasteboard — ignore that echo.
-    private var ignoreNextPasteboardChange = false
+    private var ignoredPasteboardChangeCount: Int?
 
-    init(maxItems: Int = 30) {
+    init(maxItems: Int = 30, preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        self.isRecordingPaused = preferences.bool(forKey: "recordingPaused")
         self.maxItems = max(1, min(maxItems, 100))
         load()
     }
 
-    func markIgnoreNextChange() {
-        ignoreNextPasteboardChange = true
+    func setRecordingPaused(_ paused: Bool) {
+        guard isRecordingPaused != paused else { return }
+        isRecordingPaused = paused
+        preferences.set(paused, forKey: "recordingPaused")
+        onRecordingStateChange?()
     }
 
-    func shouldIgnoreChange() -> Bool {
-        if ignoreNextPasteboardChange {
-            ignoreNextPasteboardChange = false
-            return true
-        }
-        return false
+    func markIgnoreNextChange(pasteboard: NSPasteboard = .general) {
+        ignoredPasteboardChangeCount = pasteboard.changeCount
+    }
+
+    func shouldIgnoreChange(changeCount: Int) -> Bool {
+        defer { ignoredPasteboardChangeCount = nil }
+        return ignoredPasteboardChangeCount == changeCount
     }
 
     @discardableResult
     func addText(_ text: String) -> ClipItem? {
-        // Keep internal newlines; only strip a single trailing newline from pbcopy-style data
-        var trimmed = text
-        if trimmed.hasSuffix("\r\n") {
-            trimmed = String(trimmed.dropLast(2))
-        } else if trimmed.hasSuffix("\n") || trimmed.hasSuffix("\r") {
-            trimmed = String(trimmed.dropLast())
-        }
-        guard !trimmed.isEmpty else { return nil }
-        // Bound disk use / accidental giant pastes
-        guard trimmed.utf8.count <= Self.maxTextBytes else {
-            NSLog("SnapClip: skipped text clip over \(Self.maxTextBytes) bytes")
-            return nil
-        }
+        guard !isRecordingPaused else { return nil }
+        // Preserve copied code and multiline text byte-for-byte, including endings.
+        let trimmed = text
+        guard !text.isEmpty, text.utf8.count <= Self.maxTextBytes else { return nil }
         // Dedupe consecutive identical text
         if let first = items.first, first.kind == .text, first.preview == preview(for: trimmed) {
             // Still check full content
@@ -109,7 +113,8 @@ final class HistoryStore {
 
     @discardableResult
     func addImage(from data: Data, preferredExt: String = "png") -> ClipItem? {
-        guard !data.isEmpty, data.count <= Self.maxImageBytes else { return nil }
+        guard !isRecordingPaused else { return nil }
+        guard !data.isEmpty, data.count <= Self.maxImageBytes, NSImage(data: data) != nil else { return nil }
         // Dedupe consecutive identical images by size + prefix hash
         if let first = items.first, first.kind == .image,
            let existing = try? Data(contentsOf: first.absolutePath),
@@ -166,6 +171,12 @@ final class HistoryStore {
         saveUnlocked()
     }
 
+    /// Full text for menu labels. Images have no text body.
+    func previewSource(for item: ClipItem) -> String? {
+        guard item.kind == .text, Self.isPathInsideSupportDir(item.absolutePath) else { return nil }
+        return try? String(contentsOf: item.absolutePath, encoding: .utf8)
+    }
+
     func remove(id: String) {
         lock.lock()
         defer { lock.unlock() }
@@ -180,23 +191,19 @@ final class HistoryStore {
     }
 
     /// Put item on the pasteboard (does not trigger re-history if markIgnoreNextChange was set).
-    func restoreToPasteboard(_ item: ClipItem) -> Bool {
+    func restoreToPasteboard(_ item: ClipItem, pasteboard pb: NSPasteboard = .general) -> Bool {
         guard Self.isPathInsideSupportDir(item.absolutePath) else {
             NSLog("SnapClip: refused to restore item outside support dir")
             return false
         }
-        let pb = NSPasteboard.general
-        pb.clearContents()
         switch item.kind {
         case .text:
             guard let text = try? String(contentsOf: item.absolutePath, encoding: .utf8) else { return false }
+            pb.clearContents()
             return pb.setString(text, forType: .string)
         case .image:
             guard let data = try? Data(contentsOf: item.absolutePath) else { return false }
-            guard let img = NSImage(data: data) else {
-                pb.declareTypes([.png], owner: nil)
-                return pb.setData(data, forType: .png)
-            }
+            guard let img = NSImage(data: data) else { return false }
             // Offer both public.png and public.tiff. Writing the NSImage alone yields
             // TIFF only, which some readers (terminal TUIs looking for public.png)
             // never pick up.

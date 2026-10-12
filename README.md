@@ -5,7 +5,7 @@ Clipboard history for macOS — plus automatic screenshot capture.
 Keep the last **30** clips (text + images), pick one from a list, and paste it.  
 Built as a native menu-bar app (Swift). No network, no accounts, no telemetry.
 
-> **Privacy:** History is stored **unencrypted** on disk and may include passwords or tokens you copy. Clear it when needed. Menu previews show the first ~60 characters of text. Build only from this source; the app is ad-hoc signed. See [SECURITY.md](SECURITY.md).
+> **Privacy:** History is stored **unencrypted** on disk and may include passwords or tokens you copy. Clear it when needed. The menu shows a short excerpt of text (the start and the end when a copy is long). Build only from this source; the app is ad-hoc signed. See [SECURITY.md](SECURITY.md).
 
 ## Features
 
@@ -14,9 +14,14 @@ Built as a native menu-bar app (Swift). No network, no accounts, no telemetry.
 | Clipboard history | Last **30** items (configurable) |
 | Text + images | Including screenshots |
 | Picker | **⌘⇧V** or click the menu-bar icon |
-| Menu layout | Latest **5** items open; older ones in folders **6–10**, **11–15**, … |
+| Menu layout | **Paste 1** is the first row; latest **5** stay open; older clips are in one **Older** submenu |
 | Paste | Select an item → restores clipboard + sends paste |
-| Screenshots | **⌘⇧4** / **⌘⇧3** auto-saved into history and clipboard |
+| Copy only | Hold **⌥ Option** while clicking a clip |
+| Long text | Menu shows the opening and the ending; hover a row for a longer excerpt |
+| Image previews | A small thumbnail large enough to recognize the screenshot, plus an **Image** label |
+| Search | Menu → **Search History…**; full-text search, Text/Images filters, matching excerpts |
+| Pause | Menu → **Pause History** / **Resume History**; pause survives restarts |
+| Screenshots | **⌘⇧4** / **⌘⇧3** save image files in `~/Screenshots`; SnapClip also copies them to the clipboard and history |
 | Clear | Menu → Clear History |
 
 ## Install
@@ -27,7 +32,7 @@ cd snapclip
 ./install.sh
 ```
 
-Requires Xcode Command Line Tools (`swiftc`). Install builds `SnapClip.app` into `~/Applications`, registers a login LaunchAgent, and points macOS screenshots at `~/Screenshots` (configurable).
+Requires Xcode Command Line Tools (`swiftc`). Install builds `SnapClip.app` into `~/Applications`, registers a login LaunchAgent, and sets macOS screenshots to save in `~/Screenshots` (configurable). SnapClip watches that folder and also copies each saved image to the clipboard and history.
 
 ### One-time permission
 
@@ -41,17 +46,19 @@ SnapClip may not appear in the list until you add it:
 Needed so choosing a history item can type **⌘V** into the frontmost app.  
 Without it, items still go to the clipboard — you paste manually.
 
-Then quit SnapClip from the menu bar (or `pkill -x SnapClip`) so it relaunches with permission.
+If pasting stops after rebuilding or updating, remove the old SnapClip entry with **−**, then add `~/Applications/SnapClip.app` again with **+** and enable it. Local ad-hoc builds can invalidate the previous permission.
+
+SnapClip checks permission each time you select a clip and explains how to enable it if needed. The selected clip remains available for manual **⌘V**.
 
 ## Use
 
 1. Copy anything as usual (**⌘C**) — SnapClip remembers it  
-2. Or take a screenshot (**⌘⇧4**) — also remembered  
+2. Or take a screenshot (**⌘⇧4**) — saved as a file, then copied and remembered
 3. Press **⌘⇧V** (or click the menu-bar icon)  
-4. Pick an item (keys **1–9** work while the menu is open)  
+4. Pick an item (keys **1–5** work while the menu is open)
 5. It pastes into the current app  
 
-Normal **⌘V** still pastes only the *latest* clipboard (macOS default).
+Normal **⌘V** pastes the *latest* clipboard, including your new screenshot. No history selection is needed for the latest screenshot. Original screenshot files remain in `~/Screenshots`, independently of the history limit. Copying happens after macOS finishes saving the screenshot; the floating thumbnail can delay this by a few seconds.
 
 ## Uninstall
 
@@ -80,6 +87,14 @@ Example:
 SNAPCLIP_MAX_ITEMS=50 ./install.sh
 ```
 
+Search checks the full text, including content beyond menu previews. Use **↑/↓** to select, **Return** to paste, or the **Copy** button to copy without pasting.
+
+Pausing stops new clipboard and screenshot entries from being added to SnapClip history, and pauses automatic copying from the screenshot folder. Screenshot files are still saved by macOS. Existing clips remain available, and normal copying and pasting still work. Copies made while paused are not added when recording resumes.
+
+## Development checks
+
+Run `./scripts/test.sh` to check clipboard restoration, exact text preservation, screenshot handling, and missed-copy regressions. Tests use temporary history storage and a separate clipboard.
+
 ## Logs
 
 ```bash
@@ -107,7 +122,7 @@ See [SECURITY.md](SECURITY.md).
 
 ## Why not Desktop for screenshots?
 
-Background apps cannot always read `~/Desktop` without Full Disk Access. Install points screenshots at `~/Screenshots`.
+Background apps cannot always read `~/Desktop` without Full Disk Access. SnapClip watches `~/Screenshots`, where macOS saves the original image files. It copies new screenshots to the clipboard without needing access to Desktop.
 
 ## License
 

@@ -19,47 +19,94 @@ enum PasteHelper {
         "com.exafunction.windsurf",
     ]
 
-    /// Set pasteboard from history item and simulate a paste into the frontmost app.
-    static func paste(item: ClipItem, store: HistoryStore) {
-        store.markIgnoreNextChange()
-        guard store.restoreToPasteboard(item) else {
-            NSLog("SnapClip: failed to restore item to pasteboard")
+    /// The menu action already restored the clip; never overwrite a newer copy.
+    static func pasteRestoredClip(kind: ClipKind, changeCount: Int, target: NSRunningApplication?) {
+        NSLog("SnapClip: paste requested; accessibility=%@; eventAccess=%@; destination=%@",
+              AXIsProcessTrusted() ? "yes" : "no",
+              CGPreflightPostEventAccess() ? "yes" : "no", target?.bundleIdentifier ?? "none")
+        guard AXIsProcessTrusted() else {
+            showAccessibilityHelp(copied: true)
+            return
+        }
+        guard let target, !target.isTerminated,
+              target.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+            showFailure("The clip is copied. Select a destination app and press ⌘V to paste.")
             return
         }
 
-        // Images into a terminal need Ctrl+V — Cmd+V there pastes text only,
-        // so an image-only clipboard would paste nothing at all.
-        let useControl = item.kind == .image && frontmostIsTerminal()
+        let useControl = kind == .image &&
+            terminalBundleIDs.contains(target.bundleIdentifier ?? "")
+        target.activate(options: [])
+        sendWhenReady(target: target, useControl: useControl, changeCount: changeCount, attemptsRemaining: 40)
+    }
 
-        // Give the pasteboard a moment, then send the keystroke
+    private static func sendWhenReady(target: NSRunningApplication, useControl: Bool,
+                                      changeCount: Int, attemptsRemaining: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            simulatePaste(useControl: useControl)
+            guard NSPasteboard.general.changeCount == changeCount else {
+                NSLog("SnapClip: cancelled pending paste because clipboard changed")
+                return
+            }
+            // Do not send while the picker shortcut's modifiers are still held.
+            let held = CGEventSource.flagsState(.combinedSessionState)
+                .intersection([.maskCommand, .maskShift, .maskControl, .maskAlternate])
+            guard target.isActive, held.isEmpty else {
+                if attemptsRemaining > 0 && !target.isTerminated {
+                    sendWhenReady(target: target, useControl: useControl,
+                                  changeCount: changeCount, attemptsRemaining: attemptsRemaining - 1)
+                } else {
+                    showFailure("The destination did not become ready. The clip is copied; press ⌘V to paste it.")
+                }
+                return
+            }
+            simulatePaste(useControl: useControl, target: target)
         }
     }
 
-    static func simulateCommandV() {
-        simulatePaste(useControl: false)
-    }
-
-    static func simulatePaste(useControl: Bool) {
-        // Requires Accessibility permission for synthetic keystrokes
-        let src = CGEventSource(stateID: .hidSystemState)
-
-        let keyDown = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
-        let keyUp = CGEvent(keyboardEventSource: src, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false)
+    private static func simulatePaste(useControl: Bool, target: NSRunningApplication) {
+        // Isolate synthetic events from the shortcut that opened the picker.
+        guard let source = CGEventSource(stateID: .privateState),
+              let down = CGEvent(keyboardEventSource: source,
+                                 virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true),
+              let up = CGEvent(keyboardEventSource: source,
+                               virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: false) else {
+            showFailure("Could not send the paste shortcut. The clip is copied; press ⌘V to paste it.")
+            return
+        }
         let flags: CGEventFlags = useControl ? .maskControl : .maskCommand
-        keyDown?.flags = flags
-        keyUp?.flags = flags
-
-        let loc = CGEventTapLocation.cghidEventTap
-        keyDown?.post(tap: loc)
-        keyUp?.post(tap: loc)
+        down.flags = flags
+        up.flags = flags
+        // Address the captured destination rather than routing back through the
+        // global hotkey/menu event tap. Keep down/up ordered in that process.
+        down.postToPid(target.processIdentifier)
+        up.postToPid(target.processIdentifier)
+        NSLog("SnapClip: sent %@V to %@", useControl ? "Ctrl+" : "Cmd+",
+              target.bundleIdentifier ?? "unknown")
     }
 
-    private static func frontmostIsTerminal() -> Bool {
-        guard let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier else {
-            return false
+    static func showAccessibilityHelp(copied: Bool = false) {
+        let alert = NSAlert()
+        alert.messageText = copied ? "Clip copied — allow automatic paste" : "Allow SnapClip to paste"
+        alert.informativeText = """
+        Open System Settings → Privacy & Security → Accessibility and enable SnapClip.
+
+        If SnapClip is already enabled but pasting stopped after an update, remove its old entry with −, then add ~/Applications/SnapClip.app again with + and enable it.
+
+        \(copied ? "Your selected clip is on the clipboard. Return to your app and press ⌘V to paste it now." : "This permission lets SnapClip send the paste shortcut to your app.")
+        """
+        alert.addButton(withTitle: "Open Settings")
+        alert.addButton(withTitle: "OK")
+        if alert.runModal() == .alertFirstButtonReturn,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
         }
-        return terminalBundleIDs.contains(bundleID)
+    }
+
+    static func showFailure(_ message: String) {
+        NSLog("SnapClip: %@", message)
+        let alert = NSAlert()
+        alert.messageText = "Could not paste automatically"
+        alert.informativeText = message
+        alert.runModal()
     }
 }

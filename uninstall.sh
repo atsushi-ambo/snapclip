@@ -20,6 +20,7 @@ rm -f "$PLIST"
 
 if [[ "${RESTORE_DESKTOP:-1}" == "1" ]]; then
   defaults write com.apple.screencapture location "$HOME/Desktop"
+  defaults delete com.apple.screencapture target 2>/dev/null || true
   killall SystemUIServer 2>/dev/null || true
   echo "Screenshot save location restored to Desktop."
 fi
