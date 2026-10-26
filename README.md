@@ -34,6 +34,10 @@ cd snapclip
 
 Requires Xcode Command Line Tools (`swiftc`). Install builds `SnapClip.app` into `~/Applications`, registers a login LaunchAgent, and sets macOS screenshots to save in `~/Screenshots` (configurable). SnapClip watches that folder and also copies each saved image to the clipboard and history.
 
+### One app at a time
+
+The installer registers a LaunchAgent for startup. Avoid adding SnapClip separately to **Open at Login**, which would start it twice. SnapClip also uses a process lock so simultaneous starts create only one menu-bar icon and one clipboard watcher. Crashes release the lock automatically. The agent restarts after failures; a normal quit or rejected duplicate does not trigger a restart loop.
+
 ### One-time permission
 
 SnapClip may not appear in the list until you add it:
@@ -93,7 +97,7 @@ Pausing stops new clipboard and screenshot entries from being added to SnapClip 
 
 ## Development checks
 
-Run `./scripts/test.sh` to check clipboard restoration, exact text preservation, screenshot handling, and missed-copy regressions. Tests use temporary history storage and a separate clipboard.
+Run `./scripts/test.sh` to check clipboard restoration, exact text preservation, screenshot handling, missed-copy regressions, and simultaneous-start/crash recovery. Tests use temporary history storage and a separate clipboard.
 
 ## Logs
 
