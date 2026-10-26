@@ -12,7 +12,6 @@ for old in com.snapclip.app com.snapclip.agent com.user.screenshot-to-copy; do
   rm -f "$HOME/Library/LaunchAgents/${old}.plist"
 done
 
-osascript -e 'tell application "SnapClip" to quit' 2>/dev/null || true
 pkill -x "SnapClip" 2>/dev/null || true
 pkill -x "snapclip.py" 2>/dev/null || true
 rm -rf "$APP_DST"

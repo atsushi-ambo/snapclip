@@ -3,7 +3,7 @@ name: automerge
 # The checks live in atsushi-ambo/ci-workflows; it never runs the PR's code.
 on:
   workflow_run:
-    workflows: ["security"]
+    workflows: ["ci", "security"]
     types: [completed]
   # A label added, or a draft marked ready, after CI already passed.
   pull_request_target:
@@ -19,4 +19,5 @@ jobs:
     with:
       default-branch: main
       ci-workflows: |
+        ci
         security

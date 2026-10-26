@@ -91,8 +91,6 @@ done
 # Prefer exact process name; keep a narrow legacy pattern for the old agent only
 pkill -x "SnapClip" 2>/dev/null || true
 pkill -x "snapclip.py" 2>/dev/null || true
-# Also quit if already running from Applications
-osascript -e 'tell application "SnapClip" to quit' 2>/dev/null || true
 sleep 0.3
 
 APP_BIN_XML="$(xml_escape "${APP_DST}/Contents/MacOS/SnapClip")"
@@ -116,7 +114,10 @@ cat > "$PLIST" <<EOF
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
-  <true/>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
   <key>ProcessType</key>
   <string>Interactive</string>
   <key>LimitLoadToSessionType</key>
