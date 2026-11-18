@@ -19,11 +19,13 @@ private final class SearchResultsTable: NSTableView {
 }
 
 final class HistorySearchController: NSWindowController, NSSearchFieldDelegate,
-    NSTableViewDataSource, NSTableViewDelegate {
+    NSTableViewDataSource, NSTableViewDelegate
+{
     private let store: HistoryStore
     private let search = NSSearchField()
-    private let filter = NSSegmentedControl(labels: ["All", "Text", "Images"], trackingMode: .selectOne,
-                                            target: nil, action: nil)
+    private let filter = NSSegmentedControl(
+        labels: ["All", "Text", "Images"], trackingMode: .selectOne,
+        target: nil, action: nil)
     private let table = SearchResultsTable()
     private let summary = NSTextField(labelWithString: "")
     private let copyButton = NSButton(title: "Copy", target: nil, action: nil)
@@ -35,8 +37,9 @@ final class HistorySearchController: NSWindowController, NSSearchFieldDelegate,
 
     init(store: HistoryStore) {
         self.store = store
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 600, height: 470),
-                            styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 470),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false)
         panel.title = "Search Clipboard History"
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
@@ -124,7 +127,8 @@ final class HistorySearchController: NSWindowController, NSSearchFieldDelegate,
         let items = store.items
         let query = search.stringValue
         let kind: ClipKind? = filter.selectedSegment == 1 ? .text : filter.selectedSegment == 2 ? .image : nil
-        let selectedID = table.selectedRow >= 0 && table.selectedRow < results.count
+        let selectedID =
+            table.selectedRow >= 0 && table.selectedRow < results.count
             ? results[table.selectedRow].id : nil
         // Disable actions while a newer query is pending; never paste a stale row.
         copyButton.isEnabled = false
@@ -146,7 +150,9 @@ final class HistorySearchController: NSWindowController, NSSearchFieldDelegate,
                         let row = selectedID.flatMap { id in matches.firstIndex { $0.id == id } } ?? 0
                         self.table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
                     }
-                    self.summary.stringValue = matches.isEmpty ? "No matching clips" : "\(matches.count) \(matches.count == 1 ? "clip" : "clips")"
+                    self.summary.stringValue =
+                        matches.isEmpty
+                        ? "No matching clips" : "\(matches.count) \(matches.count == 1 ? "clip" : "clips")"
                     self.updateButtons()
                 }
             }
@@ -161,7 +167,9 @@ final class HistorySearchController: NSWindowController, NSSearchFieldDelegate,
         let cell = NSTableCellView(frame: NSRect(x: 0, y: 0, width: tableView.bounds.width, height: 60))
         let icon = NSImageView(frame: NSRect(x: 10, y: 10, width: 40, height: 40))
         icon.imageScaling = .scaleProportionallyUpOrDown
-        icon.image = item.kind == .image ? ClipThumbnail.image(for: item)
+        icon.image =
+            item.kind == .image
+            ? ClipThumbnail.image(for: item)
             : NSImage(systemSymbolName: "text.alignleft", accessibilityDescription: "Text")
         cell.addSubview(icon)
         let label = NSTextField(wrappingLabelWithString: excerpts[item.id] ?? item.preview)
@@ -171,8 +179,9 @@ final class HistorySearchController: NSWindowController, NSSearchFieldDelegate,
         cell.textField = label
         cell.imageView = icon
         cell.addSubview(label)
-        cell.toolTip = DateFormatter.localizedString(from: Date(timeIntervalSince1970: item.created),
-                                                    dateStyle: .medium, timeStyle: .short)
+        cell.toolTip = DateFormatter.localizedString(
+            from: Date(timeIntervalSince1970: item.created),
+            dateStyle: .medium, timeStyle: .short)
         return cell
     }
 

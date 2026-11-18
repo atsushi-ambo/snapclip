@@ -6,7 +6,6 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private let hotkey = HotkeyManager()
     private let menu = NSMenu()
 
-    /// Latest N items shown at the top of the menu (not folded).
     private let topVisibleCount = 5
 
     /// True while the menu is on screen, so background history updates don't
@@ -44,8 +43,9 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] notification in
-            self?.rememberDestination(notification.userInfo?[NSWorkspace.applicationUserInfoKey]
-                as? NSRunningApplication)
+            self?.rememberDestination(
+                notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                    as? NSRunningApplication)
         }
 
         rebuildMenu()
@@ -59,10 +59,12 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     /// opens, so this is skipped while it is showing.
     func rebuildMenu() {
         searchController?.refreshIfVisible()
-        statusItem.button?.image = NSImage(systemSymbolName: store.isRecordingPaused ? "pause.circle" : "doc.on.clipboard",
-                                           accessibilityDescription: store.isRecordingPaused ? "SnapClip — paused" : "SnapClip")
+        statusItem.button?.image = NSImage(
+            systemSymbolName: store.isRecordingPaused ? "pause.circle" : "doc.on.clipboard",
+            accessibilityDescription: store.isRecordingPaused ? "SnapClip — paused" : "SnapClip")
         statusItem.button?.image?.isTemplate = true
-        statusItem.button?.toolTip = store.isRecordingPaused ? "SnapClip — history paused" : "SnapClip — clipboard history (⌘⇧V)"
+        statusItem.button?.toolTip =
+            store.isRecordingPaused ? "SnapClip — history paused" : "SnapClip — clipboard history (⌘⇧V)"
         guard !isMenuOpen else { return }
         populateMenu()
     }
@@ -121,7 +123,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             keyEquivalent: ""
         )
         pause.target = self
-        pause.toolTip = store.isRecordingPaused
+        pause.toolTip =
+            store.isRecordingPaused
             ? "Start saving new copies and screenshots to history again."
             : "Stop saving new copies and screenshots. Clips already saved stay usable, and normal copy and paste still work."
         menu.addItem(pause)
@@ -211,7 +214,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
             if copyOnly {
                 destination?.activate(options: [])
             } else {
-                PasteHelper.pasteRestoredClip(kind: item.kind,
+                PasteHelper.pasteRestoredClip(
+                    kind: item.kind,
                     changeCount: NSPasteboard.general.changeCount, target: destination)
             }
         }
@@ -262,7 +266,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         let mouse = NSEvent.mouseLocation
         let menuSize = menu.size
         guard menuSize.height > 1, menuSize.width > 1,
-              let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main
+            let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main
         else { return mouse }
         let visible = screen.visibleFrame
         var point = mouse
@@ -284,7 +288,8 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     private func rememberDestination(_ application: NSRunningApplication?) {
         guard let application,
-              application.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+            application.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        else { return }
         lastExternalApplication = application
     }
 
@@ -293,11 +298,10 @@ final class StatusBarController: NSObject, NSMenuDelegate {
         populateMenu()
     }
 
-    // MARK: - Actions
-
     @objc private func pasteItem(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String,
-              let item = store.items.first(where: { $0.id == id }) else {
+            let item = store.items.first(where: { $0.id == id })
+        else {
             NSLog("SnapClip: selection no longer exists in history")
             return
         }

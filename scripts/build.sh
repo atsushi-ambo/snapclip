@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Build SnapClip.app (menu bar clipboard history).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

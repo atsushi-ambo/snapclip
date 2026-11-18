@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 // Helper processes use only synthetic lock files, never clipboard or app data.
 if CommandLine.arguments.count == 3 {
@@ -71,11 +71,11 @@ try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: targ
 do {
     _ = try SingleInstanceLock.acquire(at: symlink)
     preconditionFailure("Refuse a symlink lock file")
-} catch { }
+} catch {}
 let preserved = try String(contentsOf: target, encoding: .utf8)
 precondition(preserved == "unchanged")
 do {
     _ = try SingleInstanceLock.acquire(at: directory)
     preconditionFailure("Refuse a directory lock")
-} catch { }
+} catch {}
 print("PASS: single instance across processes; restart and crash recovery; unsafe lock paths refused")

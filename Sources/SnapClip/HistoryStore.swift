@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 
 enum ClipKind: String, Codable {
     case text
@@ -19,16 +19,14 @@ struct ClipItem: Codable, Identifiable, Equatable {
     }
 }
 
-/// Persists the last N clipboard items (text + images) on disk.
 final class HistoryStore {
-    /// Max UTF-8 bytes accepted for a single text clip (images use a separate 50 MB cap).
     static let maxTextBytes = 2 * 1024 * 1024
-    /// Max bytes for a single image clip.
     static let maxImageBytes = 50 * 1024 * 1024
 
     static let supportDir: URL = {
         #if SNAPCLIP_TESTING
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("SnapClipTests-\(UUID().uuidString)", isDirectory: true)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "SnapClipTests-\(UUID().uuidString)", isDirectory: true)
         #else
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = base.appendingPathComponent("SnapClip", isDirectory: true)
@@ -82,9 +80,7 @@ final class HistoryStore {
         // Preserve copied code and multiline text byte-for-byte, including endings.
         let trimmed = text
         guard !text.isEmpty, text.utf8.count <= Self.maxTextBytes else { return nil }
-        // Dedupe consecutive identical text
         if let first = items.first, first.kind == .text, first.preview == preview(for: trimmed) {
-            // Still check full content
             if let existing = try? String(contentsOf: first.absolutePath, encoding: .utf8), existing == trimmed {
                 return nil
             }
@@ -115,10 +111,10 @@ final class HistoryStore {
     func addImage(from data: Data, preferredExt: String = "png") -> ClipItem? {
         guard !isRecordingPaused else { return nil }
         guard !data.isEmpty, data.count <= Self.maxImageBytes, NSImage(data: data) != nil else { return nil }
-        // Dedupe consecutive identical images by size + prefix hash
         if let first = items.first, first.kind == .image,
-           let existing = try? Data(contentsOf: first.absolutePath),
-           existing == data {
+            let existing = try? Data(contentsOf: first.absolutePath),
+            existing == data
+        {
             return nil
         }
         let id = UUID().uuidString
@@ -171,7 +167,6 @@ final class HistoryStore {
         saveUnlocked()
     }
 
-    /// Full text for menu labels. Images have no text body.
     func previewSource(for item: ClipItem) -> String? {
         guard item.kind == .text, Self.isPathInsideSupportDir(item.absolutePath) else { return nil }
         return try? String(contentsOf: item.absolutePath, encoding: .utf8)
@@ -209,9 +204,12 @@ final class HistoryStore {
             // never pick up.
             let isPNG = item.absolutePath.pathExtension.lowercased() == "png"
             let tiff = img.tiffRepresentation
-            let png: Data? = isPNG ? data : tiff
-                .flatMap { NSBitmapImageRep(data: $0) }
-                .flatMap { $0.representation(using: .png, properties: [:]) }
+            let png: Data? =
+                isPNG
+                ? data
+                : tiff
+                    .flatMap { NSBitmapImageRep(data: $0) }
+                    .flatMap { $0.representation(using: .png, properties: [:]) }
 
             var types: [NSPasteboard.PasteboardType] = []
             if png != nil { types.append(.png) }
@@ -225,8 +223,6 @@ final class HistoryStore {
             return ok
         }
     }
-
-    // MARK: - Path safety
 
     /// Only allow relative paths like `items/<uuid>.<ext>` with no traversal.
     static func isSafeRelativePath(_ relativePath: String) -> Bool {
@@ -264,8 +260,6 @@ final class HistoryStore {
         return allowed.contains(ext) ? ext : "png"
     }
 
-    // MARK: - Private
-
     private func insert(_ item: ClipItem) {
         lock.lock()
         defer { lock.unlock() }
@@ -280,7 +274,8 @@ final class HistoryStore {
     }
 
     private func preview(for text: String) -> String {
-        let oneLine = text
+        let oneLine =
+            text
             .replacingOccurrences(of: "\n", with: "⏎")
             .replacingOccurrences(of: "\t", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -293,7 +288,8 @@ final class HistoryStore {
         lock.lock()
         defer { lock.unlock() }
         guard let data = try? Data(contentsOf: indexURL),
-              let decoded = try? JSONDecoder().decode([ClipItem].self, from: data) else {
+            let decoded = try? JSONDecoder().decode([ClipItem].self, from: data)
+        else {
             items = []
             return
         }

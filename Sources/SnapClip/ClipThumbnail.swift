@@ -2,7 +2,6 @@ import AppKit
 import ImageIO
 
 enum ClipThumbnail {
-    /// Widest and tallest a menu preview is allowed to be, in points.
     static let menuMaxSize = NSSize(width: 120, height: 36)
     /// Wide screenshots stay at least this tall so they do not collapse into a line.
     static let menuMinHeight: CGFloat = 22
@@ -18,7 +17,6 @@ enum ClipThumbnail {
         init(_ image: CGImage) { self.image = image }
     }
 
-    /// Square-ish thumbnail used by search results.
     static func image(for item: ClipItem, maxPointSize: CGFloat = 28) -> NSImage? {
         guard let cg = sourceImage(for: item) else { return nil }
         let longest = CGFloat(max(cg.width, cg.height))
@@ -73,12 +71,15 @@ enum ClipThumbnail {
         let key = item.id as NSString
         if let cached = cache.object(forKey: key) { return cached.image }
         guard HistoryStore.isPathInsideSupportDir(item.absolutePath),
-              let source = CGImageSourceCreateWithURL(item.absolutePath as CFURL, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: 512
-              ] as CFDictionary) else { return nil }
+            let source = CGImageSourceCreateWithURL(item.absolutePath as CFURL, nil),
+            let cgImage = CGImageSourceCreateThumbnailAtIndex(
+                source, 0,
+                [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 512
+                ] as CFDictionary)
+        else { return nil }
         cache.setObject(SourceImage(cgImage), forKey: key)
         return cgImage
     }

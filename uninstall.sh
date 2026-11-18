@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Remove SnapClip agent and app.
 set -euo pipefail
 
 LABEL="com.snapclip.app"
