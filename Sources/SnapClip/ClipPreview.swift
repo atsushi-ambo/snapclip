@@ -1,6 +1,5 @@
 import Foundation
 
-/// Short, single-line labels for the menu bar picker.
 enum ClipPreview {
     /// Keeps a history row narrow enough that the picker stays about half a screen.
     static let menuLimit = 28
@@ -13,7 +12,6 @@ enum ClipPreview {
         return openingAndClosing(first: first, last: lines[lines.count - 1], limit: limit)
     }
 
-    /// Longer excerpt for the row tooltip. The menu title itself stays one short line.
     static func hoverText(from text: String, limit: Int = 160) -> String {
         let joined = meaningfulLines(text).joined(separator: " · ")
         if joined.isEmpty { return "(empty)" }

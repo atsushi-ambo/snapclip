@@ -12,23 +12,25 @@ enum HistorySearch {
                 return true
             }
             guard item.kind == .text, HistoryStore.isPathInsideSupportDir(item.absolutePath),
-                  let text = try? String(contentsOf: item.absolutePath, encoding: .utf8) else { return false }
+                let text = try? String(contentsOf: item.absolutePath, encoding: .utf8)
+            else { return false }
             return text.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
         }
     }
     static func excerpt(for item: ClipItem, query: String) -> String {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty, item.kind == .text,
-              HistoryStore.isPathInsideSupportDir(item.absolutePath),
-              let text = try? String(contentsOf: item.absolutePath, encoding: .utf8),
-              let match = text.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) else {
+            HistoryStore.isPathInsideSupportDir(item.absolutePath),
+            let text = try? String(contentsOf: item.absolutePath, encoding: .utf8),
+            let match = text.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive])
+        else {
             return item.preview
         }
         let start = text.index(match.lowerBound, offsetBy: -30, limitedBy: text.startIndex) ?? text.startIndex
         let end = text.index(match.upperBound, offsetBy: 60, limitedBy: text.endIndex) ?? text.endIndex
-        return (start > text.startIndex ? "…" : "") +
-            text[start..<end].replacingOccurrences(of: "\n", with: "⏎").replacingOccurrences(of: "\r", with: "") +
-            (end < text.endIndex ? "…" : "")
+        return (start > text.startIndex ? "…" : "")
+            + text[start..<end].replacingOccurrences(of: "\n", with: "⏎").replacingOccurrences(of: "\r", with: "")
+            + (end < text.endIndex ? "…" : "")
     }
 
 }

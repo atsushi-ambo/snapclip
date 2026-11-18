@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Install SnapClip as a login agent (menu bar clipboard history + screenshots).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -9,9 +8,7 @@ APP_SRC="$ROOT/dist/SnapClip.app"
 APP_DST="$HOME/Applications/SnapClip.app"
 LOG_DIR="$HOME/Library/Logs"
 
-# --- Validate config (prevents plist XML injection / broken paths) ---
 xml_escape() {
-  # Escape for XML text nodes
   local s=$1
   s=${s//&/&amp;}
   s=${s//</&lt;}
@@ -21,10 +18,8 @@ xml_escape() {
   printf '%s' "$s"
 }
 
-# Expand and normalize screenshot dir
 SHOT_DIR="${SNAPCLIP_DIR:-$HOME/Screenshots}"
 SHOT_DIR="${SHOT_DIR/#\~/$HOME}"
-# Must be absolute
 if [[ "$SHOT_DIR" != /* ]]; then
   echo "error: SNAPCLIP_DIR must be an absolute path (got: $SHOT_DIR)" >&2
   exit 1

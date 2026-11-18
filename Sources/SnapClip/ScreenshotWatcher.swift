@@ -1,7 +1,6 @@
-import Foundation
 import AppKit
+import Foundation
 
-/// Watches the macOS screenshot folder and adds new images to history + clipboard.
 final class ScreenshotWatcher {
     private let store: HistoryStore
     private let directory: URL
@@ -52,24 +51,28 @@ final class ScreenshotWatcher {
         if task.terminationStatus == 0 {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let loc = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !loc.isEmpty {
+                !loc.isEmpty
+            {
                 let url = URL(fileURLWithPath: (loc as NSString).expandingTildeInPath, isDirectory: true)
                 try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
                 return url.resolvingSymlinksInPath().standardizedFileURL
             }
         }
-        let fallback = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Screenshots", isDirectory: true)
+        let fallback = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+            "Screenshots", isDirectory: true)
         try? FileManager.default.createDirectory(at: fallback, withIntermediateDirectories: true)
         return fallback.resolvingSymlinksInPath().standardizedFileURL
     }
 
     private func seedKnown() {
         let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isSymbolicLinkKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
+        guard
+            let files = try? fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isSymbolicLinkKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            )
+        else {
             return
         }
         for url in files where isSafeImageFile(url) {
@@ -87,23 +90,27 @@ final class ScreenshotWatcher {
             return
         }
         let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [
-                .contentModificationDateKey,
-                .fileSizeKey,
-                .isSymbolicLinkKey,
-                .isRegularFileKey
-            ],
-            options: [.skipsHiddenFiles]
-        ) else { return }
+        guard
+            let files = try? fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [
+                    .contentModificationDateKey,
+                    .fileSizeKey,
+                    .isSymbolicLinkKey,
+                    .isRegularFileKey
+                ],
+                options: [.skipsHiddenFiles]
+            )
+        else { return }
 
         let now = Date()
         // Folder enumeration has no chronological guarantee; the newest capture
         // must be the last image copied when several arrive together.
         let images = files.filter { isSafeImageFile($0) }.sorted {
-            let left = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            let right = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let left =
+                (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let right =
+                (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             return left == right ? $0.lastPathComponent < $1.lastPathComponent : left < right
         }
         known.formIntersection(Set(images.map(fileKey)))
@@ -113,8 +120,9 @@ final class ScreenshotWatcher {
 
             // Wait for write to finish
             guard let vals = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
-                  let mdate = vals.contentModificationDate,
-                  let size = vals.fileSize, size > 0 else { continue }
+                let mdate = vals.contentModificationDate,
+                let size = vals.fileSize, size > 0
+            else { continue }
 
             if size > HistoryStore.maxImageBytes {
                 known.insert(key)
@@ -122,18 +130,19 @@ final class ScreenshotWatcher {
                 continue
             }
 
-            // Brief settle
             if now.timeIntervalSince(mdate) < 0.35 { continue }
 
             // Retry incomplete files instead of marking them as captured forever.
             guard let data = try? Data(contentsOf: url), NSImage(data: data) != nil else { continue }
             let existing = store.items.first.flatMap { item -> ClipItem? in
                 guard item.kind == .image,
-                      (try? Data(contentsOf: item.absolutePath)) == data else { return nil }
+                    (try? Data(contentsOf: item.absolutePath)) == data
+                else { return nil }
                 return item
             }
             guard let item = existing ?? store.addImage(from: data, preferredExt: url.pathExtension),
-                  store.restoreToPasteboard(item, pasteboard: pasteboard) else { continue }
+                store.restoreToPasteboard(item, pasteboard: pasteboard)
+            else { continue }
             store.markIgnoreNextChange(pasteboard: pasteboard)
             known.insert(key)
             NSLog("SnapClip: screenshot copied to clipboard")
@@ -176,8 +185,9 @@ final class ScreenshotWatcher {
 
         // Size cap (also enforced again when adding)
         if let attrs = try? fm.attributesOfItem(atPath: resolved.path),
-           let size = attrs[.size] as? NSNumber,
-           size.intValue > HistoryStore.maxImageBytes {
+            let size = attrs[.size] as? NSNumber,
+            size.intValue > HistoryStore.maxImageBytes
+        {
             return false
         }
 
@@ -187,8 +197,9 @@ final class ScreenshotWatcher {
     private func fileKey(_ url: URL) -> String {
         let path = url.standardizedFileURL.path
         if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
-           let size = attrs[.size] as? NSNumber,
-           let mdate = attrs[.modificationDate] as? Date {
+            let size = attrs[.size] as? NSNumber,
+            let mdate = attrs[.modificationDate] as? Date
+        {
             return "\(path)::\(size)::\(mdate.timeIntervalSince1970)"
         }
         return path

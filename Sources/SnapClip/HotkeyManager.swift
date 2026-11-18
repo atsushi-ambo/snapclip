@@ -1,7 +1,6 @@
 import AppKit
 import Carbon
 
-/// Global hotkey via Carbon (⌘⇧V by default).
 final class HotkeyManager {
     static var shared: HotkeyManager?
 
@@ -49,7 +48,7 @@ final class HotkeyManager {
             NSLog("SnapClip: InstallEventHandler failed (\(statusHandler))")
         }
 
-        let hotKeyID = EventHotKeyID(signature: OSType(0x534E4350), id: 1) // 'SNCP'
+        let hotKeyID = EventHotKeyID(signature: OSType(0x534E_4350), id: 1) // 'SNCP'
         let status = RegisterEventHotKey(
             keyCode,
             modifiers,

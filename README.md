@@ -97,7 +97,15 @@ Pausing stops new clipboard and screenshot entries from being added to SnapClip 
 
 ## Development checks
 
+Run `./scripts/lint.sh` for strict Swift formatting and shell syntax checks, then
+`./scripts/test.sh`, `./scripts/build.sh`, and
+`codesign --verify --deep --strict dist/SnapClip.app`. Use the toolchain-bundled
+`swift format` (configuration checked with 6.4.4); no formatter dependency is installed.
+
 Run `./scripts/test.sh` to check clipboard restoration, exact text preservation, screenshot handling, missed-copy regressions, and simultaneous-start/crash recovery. Tests use temporary history storage and a separate clipboard.
+
+Clipboard tests refuse to compile without `-D SNAPCLIP_TESTING`, which selects
+temporary history storage. See [AGENTS.md](AGENTS.md) for agent instructions.
 
 ## Logs
 

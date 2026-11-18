@@ -7,12 +7,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBar: StatusBarController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Agent app: no dock icon
         NSApp.setActivationPolicy(.accessory)
         let mainMenu = NSMenu()
         let edit = NSMenu(title: "Edit")
-        for (title, action, key) in [("Cut", "cut:", "x"), ("Copy", "copy:", "c"),
-                                    ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] {
+        for (title, action, key) in [
+            ("Cut", "cut:", "x"), ("Copy", "copy:", "c"),
+            ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")
+        ] {
             edit.addItem(withTitle: title, action: NSSelectorFromString(action), keyEquivalent: key)
         }
         let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")

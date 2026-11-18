@@ -1,4 +1,9 @@
 import AppKit
+
+#if !SNAPCLIP_TESTING
+#error("Compile with -D SNAPCLIP_TESTING to isolate tests from personal history.")
+#endif
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 let preferenceName = "SnapClipTests-\(UUID().uuidString)"
@@ -20,7 +25,8 @@ let text = "SnapClip regression: 日本語\nsecond line"
 let clip = try item(.text, ext: "txt", data: Data(text.utf8))
 precondition(store.restoreToPasteboard(clip, pasteboard: pb))
 precondition(pb.string(forType: .string) == text)
-let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2,
+let bitmap = NSBitmapImageRep(
+    bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2,
     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
     colorSpaceName: .calibratedRGB, bytesPerRow: 0, bitsPerPixel: 0)!
 let pixels = bitmap.bitmapData!
@@ -102,7 +108,9 @@ let link = watchDir.appendingPathComponent("symlink.png")
 try FileManager.default.createSymbolicLink(at: link, withDestinationURL: oldFile)
 watcher.scan()
 precondition(captures == 3, "Ignore symbolic links")
-print("PASS: exact text; copy-change tracking; invalid images; delayed, duplicate and incomplete screenshots; symlink exclusion")
+print(
+    "PASS: exact text; copy-change tracking; invalid images; delayed, duplicate and incomplete screenshots; symlink exclusion"
+)
 
 let longText = String(repeating: "prefix ", count: 20) + "Café SearchNeedle 日本語"
 let searchable = store.addText(longText)!
@@ -115,7 +123,9 @@ precondition(HistorySearch.filter(store.items, query: "  ", kind: nil) == store.
 precondition(HistorySearch.filter(store.items, query: "zz-no-results", kind: nil).isEmpty)
 let beforePause = store.items
 var pauseTransitions = 0
-store.onRecordingStateChange = { pauseTransitions += 1; watcher.discardPendingScreenshots() }
+store.onRecordingStateChange = {
+    pauseTransitions += 1; watcher.discardPendingScreenshots()
+}
 store.setRecordingPaused(true)
 precondition(store.addText("must not save") == nil)
 precondition(store.addImage(from: png) == nil)
@@ -153,7 +163,8 @@ for sample in ["a", "a\nb", "Café\n日本語", String(repeating: "x", count: 50
 print("PASS: menu lines keep the start and end of long and multiline clips")
 
 func solidPNG(width: Int, height: Int, left: NSColor, right: NSColor) -> Data {
-    let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+    let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
         colorSpaceName: .calibratedRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     let leftRGB = left.usingColorSpace(.deviceRGB)!
@@ -180,9 +191,10 @@ func red(at image: NSImage, xFraction: CGFloat) -> CGFloat {
     let info = cg.bitmapInfo
     let alpha = info.rawValue & CGBitmapInfo.alphaInfoMask.rawValue
     let offset = y * cg.bytesPerRow + x * 4
-    let redIndex = alpha == CGImageAlphaInfo.premultipliedFirst.rawValue
-        || alpha == CGImageAlphaInfo.first.rawValue
-        || alpha == CGImageAlphaInfo.noneSkipFirst.rawValue ? 1 : 0
+    let redIndex =
+        alpha == CGImageAlphaInfo.premultipliedFirst.rawValue
+            || alpha == CGImageAlphaInfo.first.rawValue
+            || alpha == CGImageAlphaInfo.noneSkipFirst.rawValue ? 1 : 0
     return CGFloat(bytes[offset + redIndex]) / 255
 }
 let wideShot = try item(.image, ext: "png", data: solidPNG(width: 200, height: 40, left: .red, right: .blue))
@@ -198,5 +210,6 @@ precondition(bannerPreview.size.height >= ClipThumbnail.menuMinHeight)
 precondition(bannerPreview.size.width <= ClipThumbnail.menuMaxSize.width)
 precondition(red(at: bannerPreview, xFraction: 0.85) > 0.7, "A very wide shot shows its leading part, not a hairline")
 let square = ClipThumbnail.menuSize(pixelW: 500, pixelH: 500)
-precondition(square.width <= ClipThumbnail.menuMaxSize.height + 0.5 && square.height <= ClipThumbnail.menuMaxSize.height + 0.5)
+precondition(
+    square.width <= ClipThumbnail.menuMaxSize.height + 0.5 && square.height <= ClipThumbnail.menuMaxSize.height + 0.5)
 print("PASS: menu thumbnails keep wide screenshots recognizable")
