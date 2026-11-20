@@ -213,3 +213,18 @@ let square = ClipThumbnail.menuSize(pixelW: 500, pixelH: 500)
 precondition(
     square.width <= ClipThumbnail.menuMaxSize.height + 0.5 && square.height <= ClipThumbnail.menuMaxSize.height + 0.5)
 print("PASS: menu thumbnails keep wide screenshots recognizable")
+
+store.clear()
+let limitedStore = HistoryStore(maxItems: 2, preferences: preferences)
+let oldest = limitedStore.addText("oldest retention fixture")!
+let middle = limitedStore.addText("middle retention fixture")!
+let newest = limitedStore.addText("newest retention fixture")!
+precondition(limitedStore.items.map(\.id) == [newest.id, middle.id], "Keep the newest clips in order")
+precondition(!FileManager.default.fileExists(atPath: oldest.absolutePath.path), "Delete the evicted clip file")
+let retainedMiddle = try String(contentsOf: middle.absolutePath, encoding: .utf8)
+let retainedNewest = try String(contentsOf: newest.absolutePath, encoding: .utf8)
+precondition(retainedMiddle == "middle retention fixture")
+precondition(retainedNewest == "newest retention fixture")
+let reloadedLimitedStore = HistoryStore(maxItems: 2, preferences: preferences)
+precondition(reloadedLimitedStore.items == limitedStore.items, "Persist the retained history across restarts")
+print("PASS: history limit evicts the oldest file, preserves retained text, and survives reload")
