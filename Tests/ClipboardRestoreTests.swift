@@ -228,3 +228,21 @@ precondition(retainedNewest == "newest retention fixture")
 let reloadedLimitedStore = HistoryStore(maxItems: 2, preferences: preferences)
 precondition(reloadedLimitedStore.items == limitedStore.items, "Persist the retained history across restarts")
 print("PASS: history limit evicts the oldest file, preserves retained text, and survives reload")
+
+limitedStore.clear()
+let sharedPrefix = String(repeating: "same preview ", count: 10)
+let firstText = sharedPrefix + "first ending\r\n"
+let secondText = sharedPrefix + "second ending\r\n"
+let firstDistinct = limitedStore.addText(firstText)!
+let secondDistinct = limitedStore.addText(secondText)!
+precondition(firstDistinct.preview == secondDistinct.preview, "Fixture previews must collide")
+precondition(limitedStore.items.map(\.id) == [secondDistinct.id, firstDistinct.id])
+let beforeDuplicate = limitedStore.items
+precondition(limitedStore.addText(secondText) == nil, "Skip an exact consecutive text duplicate")
+precondition(limitedStore.items == beforeDuplicate, "A duplicate must not evict another clip")
+let firstDistinctText = try String(contentsOf: firstDistinct.absolutePath, encoding: .utf8)
+let secondDistinctText = try String(contentsOf: secondDistinct.absolutePath, encoding: .utf8)
+precondition(firstDistinctText == firstText && secondDistinctText == secondText, "Preserve both complete texts")
+let reloadedDistinctStore = HistoryStore(maxItems: 2, preferences: preferences)
+precondition(reloadedDistinctStore.items == beforeDuplicate, "Persist distinct clips despite identical previews")
+print("PASS: identical text previews preserve distinct clips; exact consecutive duplicates do not evict history")
