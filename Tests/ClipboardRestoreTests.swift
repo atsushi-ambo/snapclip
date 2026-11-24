@@ -246,3 +246,31 @@ precondition(firstDistinctText == firstText && secondDistinctText == secondText,
 let reloadedDistinctStore = HistoryStore(maxItems: 2, preferences: preferences)
 precondition(reloadedDistinctStore.items == beforeDuplicate, "Persist distinct clips despite identical previews")
 print("PASS: identical text previews preserve distinct clips; exact consecutive duplicates do not evict history")
+
+limitedStore.clear()
+let batchDir = HistoryStore.supportDir.appendingPathComponent("batch-watch", isDirectory: true)
+try FileManager.default.createDirectory(at: batchDir, withIntermediateDirectories: true)
+let batchWatcher = ScreenshotWatcher(store: limitedStore, directory: batchDir, pasteboard: pb)
+let olderPNG = solidPNG(width: 4, height: 4, left: .red, right: .red)
+let newerPNG = solidPNG(width: 4, height: 4, left: .blue, right: .blue)
+let newerScreenshot = batchDir.appendingPathComponent("a-newer.png")
+let olderScreenshot = batchDir.appendingPathComponent("z-older.png")
+let batchTime = Date()
+try newerPNG.write(to: newerScreenshot)
+try olderPNG.write(to: olderScreenshot)
+try FileManager.default.setAttributes(
+    [.modificationDate: batchTime.addingTimeInterval(-2)], ofItemAtPath: newerScreenshot.path)
+try FileManager.default.setAttributes(
+    [.modificationDate: batchTime.addingTimeInterval(-4)], ofItemAtPath: olderScreenshot.path)
+var batchCopies: [Data] = []
+batchWatcher.onNewScreenshot = {
+    batchCopies.append(pb.data(forType: .png)!)
+}
+batchWatcher.scan()
+precondition(batchCopies == [olderPNG, newerPNG], "Copy a batch in modification order, regardless of filenames")
+precondition(pb.data(forType: .png) == newerPNG, "Leave the newest screenshot on the clipboard")
+let batchHistory = try limitedStore.items.map { try Data(contentsOf: $0.absolutePath) }
+precondition(batchHistory == [newerPNG, olderPNG], "Keep the newest screenshot first in history")
+batchWatcher.scan()
+precondition(batchCopies.count == 2, "Do not recopy a processed batch")
+print("PASS: screenshot batches copy oldest to newest and are not replayed")
