@@ -274,3 +274,18 @@ precondition(batchHistory == [newerPNG, olderPNG], "Keep the newest screenshot f
 batchWatcher.scan()
 precondition(batchCopies.count == 2, "Do not recopy a processed batch")
 print("PASS: screenshot batches copy oldest to newest and are not replayed")
+
+let capturedItems = limitedStore.items
+limitedStore.clear()
+precondition(limitedStore.items.isEmpty, "Clear captured screenshots from history")
+precondition(
+    capturedItems.allSatisfy { !FileManager.default.fileExists(atPath: $0.absolutePath.path) },
+    "Delete the stored history copies")
+let reloadedClearedStore = HistoryStore(maxItems: 2, preferences: preferences)
+precondition(reloadedClearedStore.items.isEmpty, "Cleared history stays empty after reload")
+let originalOlderPNG = try Data(contentsOf: olderScreenshot)
+let originalNewerPNG = try Data(contentsOf: newerScreenshot)
+precondition(originalOlderPNG == olderPNG && originalNewerPNG == newerPNG, "Preserve original screenshot files")
+batchWatcher.scan()
+precondition(batchCopies.count == 2 && limitedStore.items.isEmpty, "Do not recapture cleared screenshots")
+print("PASS: clearing screenshot history deletes stored copies, preserves originals, and does not replay them")
