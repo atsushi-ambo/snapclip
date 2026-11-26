@@ -81,7 +81,9 @@ final class HistoryStore {
         let trimmed = text
         guard !text.isEmpty, text.utf8.count <= Self.maxTextBytes else { return nil }
         if let first = items.first, first.kind == .text, first.preview == preview(for: trimmed) {
-            if let existing = try? String(contentsOf: first.absolutePath, encoding: .utf8), existing == trimmed {
+            if let existing = try? Data(contentsOf: first.absolutePath),
+                existing.elementsEqual(trimmed.utf8)
+            {
                 return nil
             }
         }

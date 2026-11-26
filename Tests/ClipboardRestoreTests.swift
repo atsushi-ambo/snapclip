@@ -248,6 +248,18 @@ precondition(reloadedDistinctStore.items == beforeDuplicate, "Persist distinct c
 print("PASS: identical text previews preserve distinct clips; exact consecutive duplicates do not evict history")
 
 limitedStore.clear()
+let composedText = "Caf\u{00E9}"
+let decomposedText = "Cafe\u{0301}"
+let savedComposed = limitedStore.addText(composedText)!
+let savedDecomposed = limitedStore.addText(decomposedText)!
+let composedBytes = try Data(contentsOf: savedComposed.absolutePath)
+let decomposedBytes = try Data(contentsOf: savedDecomposed.absolutePath)
+precondition(composedBytes == Data(composedText.utf8) && decomposedBytes == Data(decomposedText.utf8))
+precondition(limitedStore.addText(decomposedText) == nil, "Skip consecutive copies with identical UTF-8 bytes")
+precondition(limitedStore.items.map(\.id) == [savedDecomposed.id, savedComposed.id])
+print("PASS: canonically equivalent text with different UTF-8 bytes stays distinct")
+
+limitedStore.clear()
 let batchDir = HistoryStore.supportDir.appendingPathComponent("batch-watch", isDirectory: true)
 try FileManager.default.createDirectory(at: batchDir, withIntermediateDirectories: true)
 let batchWatcher = ScreenshotWatcher(store: limitedStore, directory: batchDir, pasteboard: pb)
